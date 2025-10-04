@@ -304,11 +304,11 @@ const donutIngredients = [
   {key:'sugar', label:'Sugar', qtyUsed:3, qtyUnit:'tbsp', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
   {key:'evap', label:'Evap Milk', qtyUsed:1, qtyUnit:'cup', boughtAs:'per 410 ml', packQty:410, packUnit:'ml', price:0},
   {key:'flour', label:'All-Purpose Flour', qtyUsed:3, qtyUnit:'cup', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
-  {key:'margarine', label:'Margarine', qtyUsed: (1/3)*100, qtyUnit:'g', boughtAs:'per 500 g', packQty:500, packUnit:'g', price:0},
+  {key:'margarine', label:'Margarine', qtyUsed: 76, qtyUnit:'g', boughtAs:'per 500 g', packQty:500, packUnit:'g', price:0},
   {key:'salt', label:'Salt', qtyUsed:1, qtyUnit:'tsp', boughtAs:'per small pack (g)', packQty:100, packUnit:'g', price:0},
   {key:'cheese', label:'Cheddar / Quickmelt Cheese', qtyUsed:86, qtyUnit:'g', boughtAs:'per 430 g', packQty:430, packUnit:'g', price:0},
   // Coating
-  {key:'powdered_milk', label:'Powdered Milk (coating)', qtyUsed:0.5*conv.tbsp_g*2/conv.tbsp_g, qtyUnit:'cup? (0.5 cup ~?)', boughtAs:'per 300 g', packQty:300, packUnit:'g', price:0, note:'1/2 cup powdered milk used -> approx 50 g (editable below)'}, // will override below more clearly
+  {key:'powdered_milk', label:'Powdered Milk (coating)', qtyUsed:168, qtyUnit:'g', boughtAs:'per 300 g', packQty:300, packUnit:'g', price:0, note:'1/2 cup powdered milk used -> approx 50 g (editable below)'}, // will override below more clearly
   {key:'powdered_sugar', label:'Powdered Sugar (coating)', qtyUsed:0.25*100, qtyUnit:'g', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
 ];
 
@@ -766,4 +766,5 @@ document.getElementById('exportBtn').addEventListener('click', ()=> {
 /* ---------- End of script ---------- */
 </script>
 </body>
+
 </html>
