@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Product Costing App - Cookies / Basque Cheesecake / Milky Donut Rolls</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <!-- SheetJS for XLSX export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{
+      --accent:#2b8cff;
+      --muted:#6b7280;
+      --card:#ffffff;
+      --bg:#f4f6fb;
+      --glass: rgba(255,255,255,0.7);
+      font-family: Inter, Roboto, Arial, sans-serif;
+    }
+    body{ margin:0; background:var(--bg); color:#111; }
+    .app{
+      max-width:1100px; margin:24px auto; padding:20px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,250,253,0.95));
+      border-radius:12px; box-shadow:0 6px 18px rgba(20,30,60,0.08);
+      min-height:80vh;
+    }
+    header{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    header h1{ margin:0; font-size:20px; }
+    .tabs{ display:flex; gap:8px; margin-top:18px; }
+    .tab{ padding:8px 14px; border-radius:8px; cursor:pointer; background:transparent; color:var(--muted); border:1px solid transparent; }
+    .tab.active{ background:var(--accent); color:white; border-color:rgba(43,140,255,0.15); box-shadow:0 6px 18px rgba(43,140,255,0.12); }
+    .content{ margin-top:18px; }
+    .card{ background:var(--card); padding:14px; border-radius:10px; box-shadow:0 2px 6px rgba(16,24,40,0.04); margin-bottom:12px; }
+    table{ width:100%; border-collapse:collapse; font-size:13px; }
+    th, td{ padding:8px 6px; text-align:left; border-bottom:1px solid #f0f3f7; vertical-align:middle; }
+    th{ color:var(--muted); font-weight:600; font-size:12px; }
+    input[type="number"], input[type="text"]{ width:100%; box-sizing:border-box; padding:6px 8px; border-radius:6px; border:1px solid #e6e9ef; }
+    .row{ display:flex; gap:12px; }
+    .col{ flex:1; }
+    .small{ width:120px; }
+    .actions{ display:flex; gap:8px; align-items:center; }
+    .btn{ padding:10px 14px; border-radius:8px; cursor:pointer; border:0; background:var(--accent); color:#fff; font-weight:600; }
+    .btn.secondary{ background:#fff; color:var(--accent); border:1px solid rgba(43,140,255,0.12); }
+    .totals{ display:flex; gap:12px; margin-top:12px; }
+    .total-card{ flex:1; padding:12px; border-radius:8px; background:linear-gradient(180deg, #fff, #fbfdff); border:1px solid #eef6ff; }
+    .muted{ color:var(--muted); font-size:13px; }
+    .note{ font-size:12px; color:var(--muted); margin-top:8px; }
+    .inline{ display:inline-block; vertical-align:middle; }
+    .center{ text-align:center; }
+    .badge{ padding:6px 8px; border-radius:20px; background:#eff6ff; color:var(--accent); font-weight:600; font-size:12px; }
+    .grid-2{ display:grid; grid-template-columns:1fr 320px; gap:12px; align-items:start; }
+    @media(max-width:880px){ .grid-2{ grid-template-columns:1fr; } .small{ width:100%; } }
+  </style>
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4CAF50">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js')
+    .then(() => console.log('Service Worker Registered'));
+  }
+</script>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Product Costing App</h1>
+        <div class="muted">Editable purchase prices → compute cost per batch and per piece. Export XLSX (one sheet per product).</div>
+      </div>
+      <div class="actions">
+        <button id="exportBtn" class="btn">Export XLSX</button>
+        <button id="recompute" class="btn secondary">Recompute</button>
+      </div>
+    </header>
+
+    <div class="tabs" role="tablist">
+      <div class="tab active" data-tab="cookies">Cookies</div>
+      <div class="tab" data-tab="cheesecake">Bento Basque Cheesecake</div>
+      <div class="tab" data-tab="donut">Milky Donut Rolls</div>
+    </div>
+
+    <div class="content">
+      <!-- COOKIES -->
+      <div class="card tabcontent" data-content="cookies" style="">
+        <div class="grid-2">
+          <div>
+            <h3>Cookies — Recipe & Costing</h3>
+            <div class="muted">Edit purchase prices (PHP). Set yield (pcs per batch) to compute per-piece cost.</div>
+
+            <table id="cookiesTable">
+              <thead>
+                <tr>
+                  <th>Ingredient</th><th style="width:110px">Qty used</th><th style="width:160px">Bought as</th><th style="width:110px">Pack price (PHP)</th><th style="width:160px">Cost used (PHP)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Rows added by JS -->
+              </tbody>
+            </table>
+
+            <div style="margin-top:10px;">
+              <label class="muted">Yield (pcs per batch)</label>
+              <input type="number" id="cookiesYield" value="12" min="1" />
+            </div>
+
+            <div class="note">
+              <strong>Notes / assumptions:</strong> 1 tsp = 5 ml; 1 tsp baking soda ≈ 4.6 g; 1 pinch salt ≈ 1 g. Price fields are per pack as labeled. You can change pack sizes/prices directly.
+            </div>
+          </div>
+
+          <div>
+            <h4 class="center badge">COOKIE TOTALS</h4>
+            <div class="total-card">
+              <div class="muted">Batch cost</div>
+              <div style="font-size:20px; font-weight:800; margin-top:6px" id="cookiesBatchCost">₱0.00</div>
+            </div>
+
+            <div class="total-card" style="margin-top:10px">
+              <div class="muted">Per piece cost</div>
+              <div style="font-size:20px; font-weight:800; margin-top:6px" id="cookiesPerPiece">₱0.00</div>
+            </div>
+
+            <div style="margin-top:12px">
+              <div class="muted">Packaging</div>
+              <table>
+                <tr><td>Cookie pouch (per pc) — bought per <input type="number" id="cookiePouchCount" value="65" style="width:60px" /> pcs</td></tr>
+                <tr><td>Price per pouch pack (PHP) <input type="number" id="cookiePouchPrice" value="0" /></td></tr>
+                <tr><td>Sticker pack (per sheet <input type="number" id="cookieStickerCount" value="55" style="width:60px" /> pcs)</td></tr>
+                <tr><td>Sticker sheet price (PHP) <input type="number" id="cookieStickerPrice" value="0" /></td></tr>
+                <tr><td>Paperbag (for 10 pcs) pack size <input type="number" id="cookiePaperbagCount" value="60" style="width:60px" /> pcs</td></tr>
+                <tr><td>Paperbag pack price (PHP) <input type="number" id="cookiePaperbagPrice" value="0" /></td></tr>
+              </table>
+
+              <div style="margin-top:8px;">
+                <div class="muted">Packaging cost per piece</div>
+                <div style="font-size:16px; font-weight:700; margin-top:6px" id="cookiePackagingPerPiece">₱0.00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHEESECAKE -->
+      <div class="card tabcontent" data-content="cheesecake" style="display:none;">
+        <div class="grid-2">
+          <div>
+            <h3>Bento Basque Cheesecake — Recipe & Costing</h3>
+            <div class="muted">This computes base cheesecake cost and toppings (Blueberry, Mango, Nutella, Biscoff). Edit prices as needed.</div>
+
+            <table id="cheeseTable">
+              <thead>
+                <tr>
+                  <th>Ingredient</th><th style="width:110px">Qty used</th><th style="width:160px">Bought as</th><th style="width:110px">Pack price (PHP)</th><th style="width:160px">Cost used (PHP)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div style="margin-top:10px;">
+              <label class="muted">Yield (bento pieces per batch)</label>
+              <input type="number" id="cheeseYield" value="1" min="1" />
+            </div>
+
+            <div style="margin-top:12px">
+              <div class="muted">Choose toppings to include in per-piece cost:</div>
+              <label><input type="radio" name="topping" value="none" checked /> None (plain)</label><br/>
+              <label><input type="radio" name="topping" value="blueberry" /> Blueberry jam</label><br/>
+              <label><input type="radio" name="topping" value="mango" /> Mango jam (given cost)</label><br/>
+              <label><input type="radio" name="topping" value="nutella" /> Nutella</label><br/>
+              <label><input type="radio" name="topping" value="biscoff" /> Biscoff (spread + 1 biscuit)</label>
+            </div>
+
+            <div class="note" style="margin-top:8px;">
+              <strong>Topping conversions used:</strong> 1 tbsp ≈ 15 g (jam). Blueberry jam consumption: 3 tbsp → 45 g per bento. Mango jam cost provided directly as PHP24 per bento. Nutella consumption: 60 g. Biscoff spread consumption: 60 g + 1 biscuit.
+            </div>
+          </div>
+
+          <div>
+            <h4 class="center badge">CHEESECAKE TOTALS</h4>
+            <div class="total-card">
+              <div class="muted">Base batch cost</div>
+              <div style="font-size:20px; font-weight:800; margin-top:6px" id="cheeseBaseBatch">₱0.00</div>
+            </div>
+
+            <div class="total-card" style="margin-top:10px">
+              <div class="muted">Per piece cost (depends on topping choice)</div>
+              <div style="font-size:20px; font-weight:800; margin-top:6px" id="cheesePerPiece">₱0.00</div>
+            </div>
+
+            <div style="margin-top:12px">
+              <div class="muted">Packaging</div>
+              <table>
+                <tr><td>Bento container: bought per <input type="number" id="bentoContainerCount" value="50" style="width:60px" /> pcs</td></tr>
+                <tr><td>Container pack price (PHP) <input type="number" id="bentoContainerPrice" value="0" /></td></tr>
+                <tr><td>Logo sticker: 3 pcs per bento; sticker sheet <input type="number" id="bentoStickerCount" value="69" style="width:60px" /> pcs</td></tr>
+                <tr><td>Sticker sheet price (PHP) <input type="number" id="bentoStickerPrice" value="0" /></td></tr>
+                <tr><td>Wax paper: 1/3 sheet per bento; sheets per pack <input type="number" id="waxSheetCount" value="180" style="width:60px" /></td></tr>
+                <tr><td>Wax paper pack price (PHP) <input type="number" id="waxSheetPrice" value="0" /></td></tr>
+              </table>
+
+              <div style="margin-top:8px;">
+                <div class="muted">Packaging cost per piece</div>
+                <div style="font-size:16px; font-weight:700; margin-top:6px" id="cheesePackagingPerPiece">₱0.00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DONUT -->
+      <div class="card tabcontent" data-content="donut" style="display:none;">
+        <div class="grid-2">
+          <div>
+            <h3>Milky Donut Rolls — Recipe & Costing</h3>
+            <div class="muted">Edit purchase prices (PHP). Set yield (pcs per batch) to compute per-piece cost.</div>
+
+            <table id="donutTable">
+              <thead>
+                <tr>
+                  <th>Ingredient</th><th style="width:120px">Qty used</th><th style="width:160px">Bought as</th><th style="width:120px">Pack price (PHP)</th><th style="width:160px">Cost used (PHP)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+
+            <div style="margin-top:10px;">
+              <label class="muted">Yield (pcs per batch)</label>
+              <input type="number" id="donutYield" value="12" min="1" />
+            </div>
+
+            <div class="note" style="margin-top:8px;">
+              <strong>Conversions used:</strong> 1 tsp ≈ 5 ml; 1 tsp active dry yeast ≈ 3.1 g; 1 cup evap milk value used as volume (pack provided per 410 ml). Cheese usage: 86 g per batch; cheese pack 430 g.
+            </div>
+          </div>
+
+          <div>
+            <h4 class="center badge">DONUT TOTALS</h4>
+            <div class="total-card">
+              <div class="muted">Batch cost</div>
+              <div style="font-size:20px; font-weight:800; margin-top:6px" id="donutBatchCost">₱0.00</div>
+            </div>
+
+            <div class="total-card" style="margin-top:10px">
+              <div class="muted">Per piece cost</div>
+              <div style="font-size:20px; font-weight:800; margin-top:6px" id="donutPerPiece">₱0.00</div>
+            </div>
+
+            <div style="margin-top:12px">
+              <div class="muted">Packaging</div>
+              <table>
+                <tr><td>Paperbag (for 10 pcs): pack size <input type="number" id="donutPaperbagCount" value="60" style="width:60px" /> pcs</td></tr>
+                <tr><td>Paperbag pack price (PHP) <input type="number" id="donutPaperbagPrice" value="0" /></td></tr>
+                <tr><td>Sticker for 10 pcs: sticker sheet size <input type="number" id="donutStickerCount" value="55" style="width:60px" /> pcs</td></tr>
+                <tr><td>Sticker sheet price (PHP) <input type="number" id="donutStickerPrice" value="0" /></td></tr>
+              </table>
+
+              <div style="margin-top:8px;">
+                <div class="muted">Packaging cost per piece</div>
+                <div style="font-size:16px; font-weight:700; margin-top:6px" id="donutPackagingPerPiece">₱0.00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px" class="muted center">Made for Quick Edit — edit prices and export your sheets.</div>
+    </div>
+  </div>
+
+<script>
+/* ---------- Utility conversions & helpers ---------- */
+const conv = {
+  tsp_ml: 5,           // 1 tsp = 5 ml
+  tbsp_g: 15,         // 1 tbsp = 15 g (jam)
+  bakingSoda_tsp_g: 4.6, // 1 tsp baking soda = 4.6 g
+  yeast_tsp_g: 3.1,   // 1 tsp active dry yeast ≈ 3.1 g
+  pinch_g: 1,         // pinch of salt ≈ 1 g
+};
+
+/* ---------- Product definitions with default purchasings ---------- */
+/* Each ingredient: { label, qtyUsed (with unit), boughtAs description, packQty (grams/ml/pcs) or packCount, packUnit, price (PHP, editable) } */
+
+const cookiesIngredients = [
+  {key:'white_sugar', label:'White Sugar', qtyUsed:200, qtyUnit:'g', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
+  {key:'brown_sugar', label:'Brown Sugar', qtyUsed:100, qtyUnit:'g', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
+  {key:'unsalted_butter', label:'Unsalted Butter (melted/browned)', qtyUsed:225, qtyUnit:'g', boughtAs:'per 225 g pack', packQty:225, packUnit:'g', price:0},
+  {key:'eggs', label:'Eggs (medium)', qtyUsed:2, qtyUnit:'pc', boughtAs:'price per egg', packQty:1, packUnit:'pc', price:0},
+  {key:'vanilla', label:'Vanilla Extract', qtyUsed:1, qtyUnit:'tsp', boughtAs:'per 60 ml', packQty:60, packUnit:'ml', price:0},
+  {key:'flour', label:'All Purpose Flour', qtyUsed:360, qtyUnit:'g', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
+  {key:'baking_soda', label:'Baking Soda', qtyUsed:1, qtyUnit:'tsp', boughtAs:'per 250 g', packQty:250, packUnit:'g', price:0},
+  {key:'salt', label:'Salt (pinch)', qtyUsed:1, qtyUnit:'pinch', boughtAs:'per small pack (g)', packQty:100, packUnit:'g', price:0},
+  {key:'chocolate', label:'Choice of Chocolate', qtyUsed:100, qtyUnit:'g', boughtAs:'per 250 g (1/4 kg)', packQty:250, packUnit:'g', price:0},
+];
+
+const cheesecakeIngredients = [
+  {key:'cream_cheese', label:'Cream Cheese', qtyUsed:225, qtyUnit:'g', boughtAs:'per 225 g', packQty:225, packUnit:'g', price:0},
+  {key:'white_sugar', label:'White Sugar', qtyUsed:100, qtyUnit:'g', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
+  {key:'eggs', label:'Eggs (medium)', qtyUsed:2, qtyUnit:'pc', boughtAs:'price per egg', packQty:1, packUnit:'pc', price:0},
+  {key:'all_cream', label:'All Purpose Cream', qtyUsed:250, qtyUnit:'ml', boughtAs:'per 250 ml', packQty:250, packUnit:'ml', price:0},
+  {key:'vanilla', label:'Vanilla Extract', qtyUsed:1, qtyUnit:'tsp', boughtAs:'per 60 ml', packQty:60, packUnit:'ml', price:0},
+];
+
+const donutIngredients = [
+  {key:'egg', label:'Large Egg', qtyUsed:1, qtyUnit:'pc', boughtAs:'price per egg', packQty:1, packUnit:'pc', price:0},
+  {key:'yeast', label:'Instant Dry Yeast', qtyUsed:2, qtyUnit:'tsp', boughtAs:'bought per small pack (g)', packQty:11, packUnit:'g', price:0}, // default pack size 11g
+  {key:'sugar', label:'Sugar', qtyUsed:3, qtyUnit:'tbsp', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
+  {key:'evap', label:'Evap Milk', qtyUsed:1, qtyUnit:'cup', boughtAs:'per 410 ml', packQty:410, packUnit:'ml', price:0},
+  {key:'flour', label:'All-Purpose Flour', qtyUsed:3, qtyUnit:'cup', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
+  {key:'margarine', label:'Margarine', qtyUsed: (1/3)*100, qtyUnit:'g', boughtAs:'per 500 g', packQty:500, packUnit:'g', price:0},
+  {key:'salt', label:'Salt', qtyUsed:1, qtyUnit:'tsp', boughtAs:'per small pack (g)', packQty:100, packUnit:'g', price:0},
+  {key:'cheese', label:'Cheddar / Quickmelt Cheese', qtyUsed:86, qtyUnit:'g', boughtAs:'per 430 g', packQty:430, packUnit:'g', price:0},
+  // Coating
+  {key:'powdered_milk', label:'Powdered Milk (coating)', qtyUsed:0.5*conv.tbsp_g*2/conv.tbsp_g, qtyUnit:'cup? (0.5 cup ~?)', boughtAs:'per 300 g', packQty:300, packUnit:'g', price:0, note:'1/2 cup powdered milk used -> approx 50 g (editable below)'}, // will override below more clearly
+  {key:'powdered_sugar', label:'Powdered Sugar (coating)', qtyUsed:0.25*100, qtyUnit:'g', boughtAs:'per 1,000 g', packQty:1000, packUnit:'g', price:0},
+];
+
+/* We'll construct the table rows dynamically and attach event listeners for computing. */
+
+/* ---------- Render helpers ---------- */
+function formatPHP(v){ return '₱' + Number(v||0).toFixed(2); }
+function n(v){ return Number(v||0); }
+
+/* Build table rows for a product */
+function buildTable(tableId, ingredients){
+  const tbody = document.querySelector('#'+tableId+' tbody');
+  tbody.innerHTML = '';
+  ingredients.forEach(ing=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${ing.label} ${ing.note ? '<div class="muted" style="font-size:11px">'+ing.note+'</div>' : ''}</td>
+      <td>${(ing.qtyUnit==='tsp' || ing.qtyUnit==='tbsp' || ing.qtyUnit==='cup' || ing.qtyUnit==='pinch') ? `${ing.qtyUsed} ${ing.qtyUnit}` : `${ing.qtyUsed} ${ing.qtyUnit}`}</td>
+      <td>${ing.boughtAs}</td>
+      <td><input type="number" data-key="${ing.key}" data-packqty="${ing.packQty}" data-packunit="${ing.packUnit}" class="packPrice" value="${ing.price}" min="0" step="0.01" /></td>
+      <td class="costUsed" data-key="${ing.key}">₱0.00</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ---------- Initialize tables ---------- */
+buildTable('cookiesTable', cookiesIngredients);
+buildTable('cheeseTable', cheesecakeIngredients);
+buildTable('donutTable', donutIngredients);
+
+/* ---------- Event wiring ---------- */
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=> {
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    const tab = t.dataset.tab;
+    document.querySelectorAll('.tabcontent').forEach(c=>{
+      c.style.display = (c.dataset.content === tab) ? '' : 'none';
+    });
+  });
+});
+
+/* Read prices from DOM into ingredients arrays */
+function readPrices(ingredients){
+  ingredients.forEach(ing=>{
+    const el = document.querySelector(`input.packPrice[data-key="${ing.key}"]`);
+    if(el) ing.price = n(el.value);
+  });
+}
+
+/* Compute cost used based on packQty and unit conversions */
+function computeCostForIngredient(ing){
+  // Cases by unit: g, ml, pc, tsp, tbsp, cup, pinch
+  const pricePerPack = n(ing.price);
+  const packQty = n(ing.packQty);
+  const unit = ing.qtyUnit || '';
+  let usedAmountInPackUnit = 0;
+
+  if(unit==='g' || unit==='ml'){ // direct grams or ml
+    usedAmountInPackUnit = n(ing.qtyUsed);
+    if(packQty>0) return pricePerPack * (usedAmountInPackUnit / packQty);
+    return 0;
+  }
+  if(unit==='pc'){ // per piece
+    // packQty defines per how many pcs price is for. If packQty=1 -> price is per piece
+    // We've set packQty=1 for 'per egg' earlier
+    return pricePerPack * (n(ing.qtyUsed) / (packQty || 1));
+  }
+  if(unit==='tsp'){
+    // need to map to g or ml depending on packUnit
+    // for baking soda we may have packUnit='g' - use grams conversion
+    if(ing.key && ing.key.includes('baking_soda')){
+      const grams = conv.bakingSoda_tsp_g * n(ing.qtyUsed);
+      return pricePerPack * (grams / packQty);
+    } else if(ing.packUnit === 'ml' || ing.packUnit === 'g'){
+      // treat 1 tsp = 5 ml
+      const ml = conv.tsp_ml * n(ing.qtyUsed);
+      if(ing.packUnit === 'ml') return pricePerPack * (ml / packQty);
+      if(ing.packUnit === 'g') return pricePerPack * (ml / packQty); // approximate
+    } else {
+      // fallback: treat as small amount -> price per tsp = pricePerPack / packQty
+      return pricePerPack * (n(ing.qtyUsed) / (packQty || 1));
+    }
+  }
+  if(unit==='tbsp'){
+    // treat 1 tbsp = 15 g for jams/sugar-ish
+    const grams = conv.tbsp_g * n(ing.qtyUsed);
+    if(ing.packUnit==='g') return pricePerPack * (grams / packQty);
+    if(ing.packUnit==='ml') return pricePerPack * (grams / packQty);
+    return pricePerPack * (n(ing.qtyUsed) / (packQty || 1));
+  }
+  if(unit==='cup'){
+    // common: for evap milk, we treat 1 cup = 240 ml approximate
+    const cupToMl = 240;
+    const ml = cupToMl * n(ing.qtyUsed);
+    if(ing.packUnit==='ml') return pricePerPack * (ml / packQty);
+    if(ing.packUnit==='g') return pricePerPack * (ml / packQty);
+    return pricePerPack * (n(ing.qtyUsed) / (packQty || 1));
+  }
+  if(unit==='pinch'){
+    const grams = conv.pinch_g * n(ing.qtyUsed);
+    return pricePerPack * (grams / packQty);
+  }
+  // fallback
+  return pricePerPack * (n(ing.qtyUsed) / (packQty || 1));
+}
+
+/* Update displayed costs */
+function updateDisplayedCosts(tableId, ingredients){
+  ingredients.forEach(ing=>{
+    const cost = computeCostForIngredient(ing);
+    const cell = document.querySelector(`#${tableId} .costUsed[data-key="${ing.key}"]`);
+    if(cell) cell.textContent = formatPHP(cost);
+    ing.lastCost = cost;
+  });
+}
+
+/* Packaging computations for cookies */
+function computeCookiePackaging(){
+  const pouchCount = n(document.getElementById('cookiePouchCount').value);
+  const pouchPrice = n(document.getElementById('cookiePouchPrice').value);
+  const stickerCount = n(document.getElementById('cookieStickerCount').value);
+  const stickerPrice = n(document.getElementById('cookieStickerPrice').value);
+  const bagCount = n(document.getElementById('cookiePaperbagCount').value);
+  const bagPrice = n(document.getElementById('cookiePaperbagPrice').value);
+  const yieldPcs = n(document.getElementById('cookiesYield').value) || 1;
+
+  const pouchPerPc = pouchPrice / (pouchCount || 1);
+  const stickerPerPc = stickerPrice / (stickerCount || 1);
+  const bagPer10pcs = bagPrice / (bagCount || 1); // price per paper bag pack / packCount -> per bag; but bag is used per 10pcs
+  const bagPerPiece = bagPer10pcs / 10;
+
+  const totalPerPiece = pouchPerPc + stickerPerPc + bagPerPiece;
+  document.getElementById('cookiePackagingPerPiece').textContent = formatPHP(totalPerPiece);
+  return totalPerPiece;
+}
+
+/* Packaging for cheesecake */
+function computeCheesePackaging(){
+  const contCount = n(document.getElementById('bentoContainerCount').value);
+  const contPrice = n(document.getElementById('bentoContainerPrice').value);
+  const stickerCount = n(document.getElementById('bentoStickerCount').value);
+  const stickerPrice = n(document.getElementById('bentoStickerPrice').value);
+  const waxCount = n(document.getElementById('waxSheetCount').value);
+  const waxPrice = n(document.getElementById('waxSheetPrice').value);
+  const stickersNeeded = 3;
+
+  const contPerPiece = contPrice / (contCount || 1);
+  const stickerPerSheet = stickerPrice / (stickerCount || 1);
+  const stickerPerPiece = (stickerPerSheet * stickersNeeded);
+  const waxPerPiece = (waxPrice / (waxCount || 1)) * (1/3);
+
+  const total = contPerPiece + stickerPerPiece + waxPerPiece;
+  document.getElementById('cheesePackagingPerPiece').textContent = formatPHP(total);
+  return total;
+}
+
+/* Packaging for donut */
+function computeDonutPackaging(){
+  const bagCount = n(document.getElementById('donutPaperbagCount').value);
+  const bagPrice = n(document.getElementById('donutPaperbagPrice').value);
+  const stickerCount = n(document.getElementById('donutStickerCount').value);
+  const stickerPrice = n(document.getElementById('donutStickerPrice').value);
+
+  // paperbag used per 10 pcs -> price per bag = packPrice / packCount -> then per bag / 10 = per piece contribution
+  const bagPerPiece = (bagPrice / (bagCount || 1)) / 10;
+  const stickerPer10 = stickerPrice / (stickerCount || 1);
+  const stickerPerPiece = stickerPer10 / 10;
+
+  const total = bagPerPiece + stickerPerPiece;
+  document.getElementById('donutPackagingPerPiece').textContent = formatPHP(total);
+  return total;
+}
+
+/* ---------- Toppings computations ---------- */
+function computeCheeseToppingCost(toppingChoice){
+  // Get relevant prices from DOM
+  // Blueberry jam bought per 320g -> input field required somewhere; we add hidden inputs dynamically
+  // We'll read by id; if not present, default to 0
+  const blueberryPackPrice = n(document.getElementById('blueberryPackPrice') ? document.getElementById('blueberryPackPrice').value : 0);
+  const blueberryPackG = 320;
+  // consumption: 3 tbsp -> 45 g
+  const blueberryUsedG = 3 * conv.tbsp_g;
+  const blueberryCost = blueberryPackPrice * (blueberryUsedG / blueberryPackG);
+
+  const mangoCost = 24; // given per bento
+
+  const nutellaPackPrice = n(document.getElementById('nutellaPackPrice') ? document.getElementById('nutellaPackPrice').value : 0);
+  const nutellaPackG = 900;
+  const nutellaUsedG = 60;
+  const nutellaCost = nutellaPackPrice * (nutellaUsedG / nutellaPackG);
+
+  const biscoffPackPrice = n(document.getElementById('biscoffPackPrice') ? document.getElementById('biscoffPackPrice').value : 0);
+  const biscoffPackG = 720;
+  const biscoffUsedG = 60;
+  const biscoffSpreadCost = biscoffPackPrice * (biscoffUsedG / biscoffPackG);
+
+  const biscuitPackPrice = n(document.getElementById('biscoffBiscuitPrice') ? document.getElementById('biscoffBiscuitPrice').value : 0);
+  const biscuitPackCount = 60; // per 500 g has 60 pcs per user's data
+  const biscuitUnitPrice = biscuitPackPrice / biscuitPackCount;
+  const biscoffBiscuitCost = biscuitUnitPrice * 1;
+
+  return {
+    blueberryCost,
+    mangoCost,
+    nutellaCost,
+    biscoffCost: biscoffSpreadCost + biscoffBiscuitCost,
+  };
+}
+
+/* ---------- Full compute flows ---------- */
+function computeCookies(){
+  readPrices(cookiesIngredients);
+  updateDisplayedCosts('cookiesTable', cookiesIngredients);
+  const batchCost = cookiesIngredients.reduce((s, it)=> s + (it.lastCost || 0), 0);
+  const yieldPcs = n(document.getElementById('cookiesYield').value) || 1;
+  const perPiece = batchCost / yieldPcs;
+  const packPerPiece = computeCookiePackaging();
+  document.getElementById('cookiesBatchCost').textContent = formatPHP(batchCost + 0);
+  document.getElementById('cookiesPerPiece').textContent = formatPHP(perPiece + packPerPiece);
+  return { batchCost, perPiece, packPerPiece };
+}
+
+function computeCheesecake(){
+  readPrices(cheesecakeIngredients);
+  // Also read cheesecake-specific pack prices: cream cheese price input is in table; but toppings pack inputs are separate
+  updateDisplayedCosts('cheeseTable', cheesecakeIngredients);
+  const baseBatchCost = cheesecakeIngredients.reduce((s,it)=> s + (it.lastCost || 0), 0);
+  const yieldPieces = n(document.getElementById('cheeseYield').value) || 1;
+  const basePerPiece = baseBatchCost / yieldPieces;
+  const packagingPerPiece = computeCheesePackaging();
+  const toppingChoice = document.querySelector('input[name="topping"]:checked').value;
+
+  // Topping pack price fields
+  // ensure elements exist in DOM: we'll create them if not yet (hidden inputs in DOM)
+  ensureToppingInputs();
+
+  const toppingCosts = computeCheeseToppingCost();
+  let toppingPerPiece = 0;
+  if(toppingChoice === 'blueberry') toppingPerPiece = toppingCosts.blueberryCost;
+  if(toppingChoice === 'mango') toppingPerPiece = toppingCosts.mangoCost;
+  if(toppingChoice === 'nutella') toppingPerPiece = toppingCosts.nutellaCost;
+  if(toppingChoice === 'biscoff') toppingPerPiece = toppingCosts.biscoffCost;
+
+  const finalPerPiece = basePerPiece + packagingPerPiece + toppingPerPiece;
+  document.getElementById('cheeseBaseBatch').textContent = formatPHP(baseBatchCost);
+  document.getElementById('cheesePerPiece').textContent = formatPHP(finalPerPiece);
+  return { baseBatchCost, basePerPiece, packagingPerPiece, toppingPerPiece, finalPerPiece };
+}
+
+function computeDonut(){
+  readPrices(donutIngredients);
+  // Some donut ingredients use cups/tbsp mapping; we need to ensure proper packQty; we assume flour packUnit g and we will approximate cups->grams
+  // We'll convert cups for flour: 1 cup AP flour ≈ 120 g; sugar 1 tbsp ≈ 12.5 g (but earlier used 15g for tbsp jam). We'll make a pragmatic mapping.
+  // Adjust donutIngredients' values for cups to grams for this computation:
+  // Find flour row and replace lastCost via conversion.
+  // We'll compute individual costs with extended logic here.
+
+  donutIngredients.forEach(ing => {
+    // convert units to compute cost
+    if(ing.qtyUnit === 'cup' && ing.key === 'flour'){
+      // 1 cup flour = 120 g
+      const grams = 120 * n(ing.qtyUsed);
+      // create a temporary virtual ing to compute cost
+      const virtual = {...ing, qtyUnit:'g', qtyUsed:grams, packQty:ing.packQty, price:ing.price};
+      ing.lastCost = computeCostForIngredient(virtual);
+    } else if(ing.qtyUnit === 'tbsp' && ing.key === 'sugar'){
+      // 1 tbsp sugar ≈ 12.5 g (we'll use 12.5)
+      const grams = 12.5 * n(ing.qtyUsed);
+      const virtual = {...ing, qtyUnit:'g', qtyUsed:grams, packQty:ing.packQty, price:ing.price};
+      ing.lastCost = computeCostForIngredient(virtual);
+    } else if(ing.qtyUnit === 'cup' && ing.key === 'evap'){
+      // 1 cup = 240 ml
+      const ml = 240 * n(ing.qtyUsed);
+      const virtual = {...ing, qtyUnit:'ml', qtyUsed:ml, packQty:ing.packQty, price:ing.price};
+      ing.lastCost = computeCostForIngredient(virtual);
+    } else if(ing.qtyUnit === 'tsp' && ing.key==='yeast'){
+      const grams = conv.yeast_tsp_g * n(ing.qtyUsed);
+      const virtual = {...ing, qtyUnit:'g', qtyUsed:grams, packQty:ing.packQty, price:ing.price};
+      ing.lastCost = computeCostForIngredient(virtual);
+    } else if(ing.qtyUnit === 'tsp' && ing.key==='salt'){
+      const grams = conv.tsp_ml * n(ing.qtyUsed); // rough
+      const virtual = {...ing, qtyUnit:'g', qtyUsed:grams, packQty:ing.packQty, price:ing.price};
+      ing.lastCost = computeCostForIngredient(virtual);
+    } else {
+      // default compute
+      ing.lastCost = computeCostForIngredient(ing);
+    }
+    // update DOM
+    const cell = document.querySelector(`#donutTable .costUsed[data-key="${ing.key}"]`);
+    if(cell) cell.textContent = formatPHP(ing.lastCost);
+  });
+
+  const batchCost = donutIngredients.reduce((s,it)=> s + (it.lastCost || 0), 0);
+  const yieldPieces = n(document.getElementById('donutYield').value) || 1;
+  const perPiece = batchCost / yieldPieces;
+  const packPerPiece = computeDonutPackaging();
+  document.getElementById('donutBatchCost').textContent = formatPHP(batchCost);
+  document.getElementById('donutPerPiece').textContent = formatPHP(perPiece + packPerPiece);
+  return { batchCost, perPiece, packPerPiece };
+}
+
+/* ---------- Ensure topping inputs exist (hidden input fields) ---------- */
+function ensureToppingInputs(){
+  if(document.getElementById('blueberryPackPrice')) return;
+  // create hidden inputs appended to body for convenience
+  const container = document.createElement('div');
+  container.style.display='none';
+  container.innerHTML = `
+    <input id="blueberryPackPrice" type="number" value="0" />
+    <input id="nutellaPackPrice" type="number" value="529" />
+    <input id="biscoffPackPrice" type="number" value="512" />
+    <input id="biscoffBiscuitPrice" type="number" value="329" />
+    <!-- user can change these via inspector or we could add visible fields later -->
+  `;
+  document.body.appendChild(container);
+}
+
+/* ---------- Initial default values for toppings and packaging (visible controls for user convenience) ---------- */
+(function addToppingInputsVisible(){
+  ensureToppingInputs();
+  // Add a small visible area below cheesecake table for topping pack price edits
+  const td = document.createElement('div');
+  td.className='card';
+  td.style.marginTop='8px';
+  td.innerHTML = `
+    <h4 style="margin:0 0 8px 0">Topping Pack Prices (edit if you have different price)</h4>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div style="min-width:200px"><label class="muted">Blueberry jam — pack 320 g price (PHP)</label><input id="blueberryPackPriceVisible" type="number" value="0" /></div>
+      <div style="min-width:200px"><label class="muted">Nutella — 900 g pack price (PHP)</label><input id="nutellaPackPriceVisible" type="number" value="529" /></div>
+      <div style="min-width:200px"><label class="muted">Biscoff spread — 720 g pack price (PHP)</label><input id="biscoffPackPriceVisible" type="number" value="512" /></div>
+      <div style="min-width:200px"><label class="muted">Biscoff biscuits — 500 g (60 pcs) pack price (PHP)</label><input id="biscoffBiscuitPriceVisible" type="number" value="329" /></div>
+    </div>
+  `;
+  // insert after cheeseTable
+  const cheeseCard = document.querySelector('.tabcontent[data-content="cheesecake"] > .grid-2 > div');
+  cheeseCard.appendChild(td);
+  // wire visible inputs to hidden ones
+  document.getElementById('blueberryPackPriceVisible').addEventListener('input', e => {
+    document.getElementById('blueberryPackPrice').value = e.target.value;
+    computeAll();
+  });
+  document.getElementById('nutellaPackPriceVisible').addEventListener('input', e => {
+    document.getElementById('nutellaPackPrice').value = e.target.value;
+    computeAll();
+  });
+  document.getElementById('biscoffPackPriceVisible').addEventListener('input', e => {
+    document.getElementById('biscoffPackPrice').value = e.target.value;
+    computeAll();
+  });
+  document.getElementById('biscoffBiscuitPriceVisible').addEventListener('input', e => {
+    document.getElementById('biscoffBiscuitPrice').value = e.target.value;
+    computeAll();
+  });
+})();
+
+/* ---------- Setup listeners on any packPrice inputs to recompute on change ---------- */
+document.addEventListener('input', (e) => {
+  if(e.target.matches('input.packPrice') || e.target.matches('#cookiesYield') || e.target.matches('#donutYield') || e.target.matches('#cheeseYield') || e.target.matches('.grid-2 input') || e.target.matches('input[type="number"]')){
+    // recompute everything (debounce small)
+    window.requestAnimationFrame(computeAll);
+  }
+});
+document.querySelectorAll('input[name="topping"]').forEach(r => r.addEventListener('change', computeAll));
+document.getElementById('recompute').addEventListener('click', computeAll);
+
+/* ---------- computeAll ---------- */
+function computeAll(){
+  computeCookies();
+  computeCheesecake();
+  computeDonut();
+}
+
+/* initial compute */
+computeAll();
+
+/* ---------- Export XLSX functionality ---------- */
+document.getElementById('exportBtn').addEventListener('click', ()=> {
+  // Build 3 sheets: Cookies, Bento Basque Cheesecake, Milky Donut Rolls
+  const wb = XLSX.utils.book_new();
+
+  // Cookies sheet
+  const cookieRows = [
+    ['Ingredient','Qty used','Bought as','Pack price (PHP)','Cost used (PHP)']
+  ];
+  cookiesIngredients.forEach(it=>{
+    cookieRows.push([it.label, (it.qtyUsed + ' ' + (it.qtyUnit||'')), it.boughtAs, n(it.price).toFixed(2), n(it.lastCost||0).toFixed(2)]);
+  });
+  const cookieYield = n(document.getElementById('cookiesYield').value);
+  const cookiePackPerPiece = computeCookiePackaging();
+  const cookieBatch = cookiesIngredients.reduce((s,it)=> s + (n(it.lastCost)||0), 0);
+  cookieRows.push([]);
+  cookieRows.push(['Batch Cost','', '', '', cookieBatch.toFixed(2)]);
+  cookieRows.push(['Yield (pcs)','', '', '', cookieYield]);
+  cookieRows.push(['Packaging per piece (PHP)','', '', '', cookiePackPerPiece.toFixed(2)]);
+  cookieRows.push(['Per piece cost (incl packaging)','', '', '', (cookieBatch/cookieYield + cookiePackPerPiece).toFixed(2)]);
+
+  const cs = XLSX.utils.aoa_to_sheet(cookieRows);
+  XLSX.utils.book_append_sheet(wb, cs, 'Cookies');
+
+  // Cheesecake sheet
+  const cheeseRows = [
+    ['Ingredient','Qty used','Bought as','Pack price (PHP)','Cost used (PHP)']
+  ];
+  cheesecakeIngredients.forEach(it=>{
+    cheeseRows.push([it.label, (it.qtyUsed + ' ' + (it.qtyUnit||'')), it.boughtAs, n(it.price).toFixed(2), n(it.lastCost||0).toFixed(2)]);
+  });
+  const cheeseBaseBatch = cheesecakeIngredients.reduce((s,it)=> s + (n(it.lastCost)||0), 0);
+  const cheeseYield = n(document.getElementById('cheeseYield').value);
+  const cheesePackaging = computeCheesePackaging();
+  const toppingChoice = document.querySelector('input[name="topping"]:checked').value;
+  const toppingCosts = computeCheeseToppingCost();
+  cheeseRows.push([]);
+  cheeseRows.push(['Base Batch Cost','', '', '', cheeseBaseBatch.toFixed(2)]);
+  cheeseRows.push(['Yield (pieces)','', '', '', cheeseYield]);
+  cheeseRows.push(['Packaging per piece (PHP)','', '', '', cheesePackaging.toFixed(2)]);
+  cheeseRows.push(['Selected topping','', '', '', toppingChoice]);
+  cheeseRows.push(['Blueberry topping cost (per piece)','', '', '', toppingCosts.blueberryCost.toFixed(2)]);
+  cheeseRows.push(['Mango topping cost (per piece)','', '', '', toppingCosts.mangoCost.toFixed(2)]);
+  cheeseRows.push(['Nutella topping cost (per piece)','', '', '', toppingCosts.nutellaCost.toFixed(2)]);
+  cheeseRows.push(['Biscoff topping cost (per piece)','', '', '', toppingCosts.biscoffCost.toFixed(2)]);
+  // compute final per piece
+  const chosenToppingCost = (toppingChoice==='none') ? 0 : (toppingChoice==='blueberry' ? toppingCosts.blueberryCost : toppingChoice==='mango' ? toppingCosts.mangoCost : toppingChoice==='nutella' ? toppingCosts.nutellaCost : toppingCosts.biscoffCost);
+  const cheeseFinalPerPiece = (cheeseBaseBatch/cheeseYield) + cheesePackaging + chosenToppingCost;
+  cheeseRows.push(['Final per piece (incl packaging & topping)','', '', '', cheeseFinalPerPiece.toFixed(2)]);
+
+  const ch = XLSX.utils.aoa_to_sheet(cheeseRows);
+  XLSX.utils.book_append_sheet(wb, ch, 'Bento Basque Cheesecake');
+
+  // Donut sheet
+  const donutRows = [
+    ['Ingredient','Qty used','Bought as','Pack price (PHP)','Cost used (PHP)']
+  ];
+  donutIngredients.forEach(it=>{
+    donutRows.push([it.label, (it.qtyUsed + ' ' + (it.qtyUnit||'')), it.boughtAs, n(it.price).toFixed(2), n(it.lastCost||0).toFixed(2)]);
+  });
+  const donutBatch = donutIngredients.reduce((s,it)=> s + (n(it.lastCost)||0), 0);
+  const donutYield = n(document.getElementById('donutYield').value);
+  const donutPackaging = computeDonutPackaging();
+  donutRows.push([]);
+  donutRows.push(['Batch Cost','', '', '', donutBatch.toFixed(2)]);
+  donutRows.push(['Yield (pcs)','', '', '', donutYield]);
+  donutRows.push(['Packaging per piece (PHP)','', '', '', donutPackaging.toFixed(2)]);
+  donutRows.push(['Per piece cost (incl packaging)','', '', '', (donutBatch/donutYield + donutPackaging).toFixed(2)]);
+
+  const ds = XLSX.utils.aoa_to_sheet(donutRows);
+  XLSX.utils.book_append_sheet(wb, ds, 'Milky Donut Rolls');
+
+  // Create file name with date
+  const dateStr = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `product_costing_${dateStr}.xlsx`);
+});
+
+/* ---------- End of script ---------- */
+</script>
+</body>
+</html>
